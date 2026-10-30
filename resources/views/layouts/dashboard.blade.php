@@ -28,7 +28,10 @@
         </nav>
 
         <div class="sidebar-footer">
-            <a href="{{ route('login') }}" class="logout-btn">🚪 Keluar</a>
+            <form action="{{ route('logout') }}" method="POST">
+                @csrf
+                <button type="submit" class="logout-btn" style="width:100%; border:none; background:none; text-align:left; cursor:pointer;">🚪 Keluar</button>
+            </form>
         </div>
     </aside>
 

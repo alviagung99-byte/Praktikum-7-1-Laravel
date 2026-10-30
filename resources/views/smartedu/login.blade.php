@@ -70,7 +70,12 @@
         margin-top: 1.5rem;
     }
 
+    .demo-role-form {
+        margin: 0;
+    }
+
     .demo-role-btn {
+        width: 100%;
         padding: .6rem .75rem;
         border: 1.5px solid #e2e8f0;
         border-radius: 8px;
@@ -108,14 +113,21 @@
             </ul>
         </div>
 
-        <form action="{{ route('login') }}" method="GET">
+        @if ($errors->any())
+            <div style="background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;padding:.75rem 1rem;border-radius:10px;margin-bottom:1rem;font-size:.85rem;">
+                {{ $errors->first() }}
+            </div>
+        @endif
+
+        <form action="{{ route('login.submit') }}" method="POST">
+            @csrf
             <div class="form-group">
                 <label class="form-label" for="email">📧 Email</label>
-                <input type="email" id="email" name="email" class="form-control" placeholder="contoh@sekolah.id">
+                <input type="email" id="email" name="email" class="form-control" placeholder="contoh@sekolah.id" value="{{ old('email', 'admin@smartedu.id') }}">
             </div>
             <div class="form-group">
                 <label class="form-label" for="password">🔒 Password</label>
-                <input type="password" id="password" name="password" class="form-control" placeholder="Masukkan password">
+                <input type="password" id="password" name="password" class="form-control" placeholder="Masukkan password" value="password">
             </div>
             <button type="submit" class="btn-login">🚀 Masuk</button>
         </form>
@@ -124,11 +136,24 @@
             atau akses langsung ke:
         </div>
 
+        @php
+            $demoAccounts = [
+                ['label' => 'Staff TU', 'icon' => '🏢', 'email' => 'admin@smartedu.id', 'password' => 'password'],
+                ['label' => 'Guru', 'icon' => '👨‍🏫', 'email' => 'dewi@smartedu.id', 'password' => 'password'],
+                ['label' => 'Siswa', 'icon' => '🎒', 'email' => 'andi@smartedu.id', 'password' => 'password'],
+                ['label' => 'Orang Tua', 'icon' => '👨‍👩‍👦', 'email' => 'prasetyo@gmail.com', 'password' => 'password'],
+            ];
+        @endphp
+
         <div class="demo-roles">
-            <a href="{{ route('staff-tu.dashboard') }}" class="demo-role-btn">🏢 Staff TU</a>
-            <a href="{{ route('guru.dashboard') }}"     class="demo-role-btn">👨‍🏫 Guru</a>
-            <a href="{{ route('siswa.dashboard') }}"    class="demo-role-btn">🎒 Siswa</a>
-            <a href="{{ route('orang-tua.dashboard') }}" class="demo-role-btn">👨‍👩‍👦 Orang Tua</a>
+            @foreach ($demoAccounts as $account)
+                <form action="{{ route('login.submit') }}" method="POST" class="demo-role-form">
+                    @csrf
+                    <input type="hidden" name="email" value="{{ $account['email'] }}">
+                    <input type="hidden" name="password" value="{{ $account['password'] }}">
+                    <button type="submit" class="demo-role-btn">{{ $account['icon'] }} {{ $account['label'] }}</button>
+                </form>
+            @endforeach
         </div>
 
         <div style="text-align:center; margin-top:1.25rem; font-size:.88rem; color:#64748b;">

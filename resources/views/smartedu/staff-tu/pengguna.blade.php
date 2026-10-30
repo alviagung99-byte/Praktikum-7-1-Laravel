@@ -18,8 +18,14 @@
         <h2 style="font-size:1.6rem;font-weight:800;">👥 Manajemen Pengguna</h2>
         <p style="color:#64748b;margin-top:.25rem;">Kelola akun Staff TU, guru, siswa, dan orang tua.</p>
     </div>
-    <a href="{{ route('pendaftaran.form') }}" class="btn btn-primary">➕ Tambah Pengguna</a>
+    <a href="{{ route('staff-tu.pengguna.create') }}" class="btn btn-primary">➕ Tambah Pengguna</a>
 </div>
+
+@if (session('success'))
+    <div style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;border-radius:10px;padding:.8rem 1rem;margin-bottom:1rem;">
+        {{ session('success') }}
+    </div>
+@endif
 
 <div class="card">
     <div class="table-wrap">
@@ -46,8 +52,12 @@
                         <span class="badge {{ $roleColors[$user['role']] ?? 'badge-blue' }}">{{ $user['role'] }}</span>
                     </td>
                     <td>
-                        <a href="#" style="color:#2563eb;font-weight:600;font-size:.85rem;margin-right:.75rem;">✏️ Edit</a>
-                        <a href="#" style="color:#dc2626;font-weight:600;font-size:.85rem;" onclick="return confirm('Hapus pengguna ini?')">🗑️ Hapus</a>
+                        <a href="{{ route('staff-tu.pengguna.edit', $user['id']) }}" style="color:#2563eb;font-weight:600;font-size:.85rem;margin-right:.75rem;">✏️ Edit</a>
+                        <form action="{{ route('staff-tu.pengguna.destroy', $user['id']) }}" method="POST" style="display:inline;" onsubmit="return confirm('Hapus pengguna ini?')">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" style="border:none;background:none;color:#dc2626;font-weight:600;font-size:.85rem;cursor:pointer;padding:0;">🗑️ Hapus</button>
+                        </form>
                     </td>
                 </tr>
                 @endforeach

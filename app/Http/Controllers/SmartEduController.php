@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class SmartEduController extends Controller
 {
@@ -26,7 +28,71 @@ class SmartEduController extends Controller
 
     public function loginForm()
     {
+        if (session('smartedu_user')) {
+            $role = session('smartedu_user.role');
+            $redirectMap = [
+                'staff-tu' => 'staff-tu.dashboard',
+                'guru' => 'guru.dashboard',
+                'siswa' => 'siswa.dashboard',
+                'orang-tua' => 'orang-tua.dashboard',
+            ];
+
+            if (isset($redirectMap[$role])) {
+                return redirect()->route($redirectMap[$role]);
+            }
+        }
+
         return view('smartedu.login');
+    }
+
+    public function login(Request $request)
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string'],
+        ]);
+
+        $email = strtolower(trim($validated['email']));
+        $users = $this->allPengguna();
+
+        foreach ($users as $user) {
+            if (strtolower($user['email']) !== $email) {
+                continue;
+            }
+
+            if (($user['password'] ?? '') !== $validated['password']) {
+                continue;
+            }
+
+            $role = strtolower(str_replace(' ', '-', $user['role']));
+            $redirectMap = [
+                'staff-tu' => 'staff-tu.dashboard',
+                'guru' => 'guru.dashboard',
+                'siswa' => 'siswa.dashboard',
+                'orang-tua' => 'orang-tua.dashboard',
+            ];
+
+            session([
+                'smartedu_user' => [
+                    'email' => $email,
+                    'name' => $user['nama'],
+                    'role' => $role,
+                ],
+            ]);
+
+            return redirect()->route($redirectMap[$role] ?? 'home');
+        }
+
+        return back()->withErrors([
+            'email' => 'Email atau password salah.',
+        ])->onlyInput('email');
+    }
+
+    public function logout()
+    {
+        session()->forget('smartedu_user');
+
+        return redirect()->route('login');
     }
 
     // ----------------------------------------------------------
@@ -116,14 +182,133 @@ class SmartEduController extends Controller
 
     public function pengguna()
     {
-        $pengguna = [
-            ['id' => 'TU-001',    'nama' => 'Admin Sekolah',   'email' => 'admin@smartedu.id',   'role' => 'Staff TU'],
-            ['id' => 'GR-0012',   'nama' => 'Ibu Dewi',        'email' => 'dewi@smartedu.id',    'role' => 'Guru'],
-            ['id' => '20240001',  'nama' => 'Andi Prasetyo',   'email' => 'andi@smartedu.id',    'role' => 'Siswa'],
-            ['id' => 'OT-20240001','nama' => 'Bapak Prasetyo', 'email' => 'prasetyo@gmail.com',  'role' => 'Orang Tua'],
-        ];
+        $pengguna = $this->allPengguna();
 
         return view('smartedu.staff-tu.pengguna', compact('pengguna'));
+    }
+
+    public function createPengguna()
+    {
+        return view('smartedu.staff-tu.pengguna-create');
+    }
+
+    public function storePengguna(Request $request)
+    {
+        $validated = $request->validate([
+            'id' => ['required', 'string', 'max:20'],
+            'nama' => ['required', 'string', 'max:100'],
+            'email' => ['required', 'email', 'max:100'],
+            'password' => ['required', 'string', 'min:4'],
+            'role' => ['required', 'in:Staff TU,Guru,Siswa,Orang Tua'],
+        ]);
+
+        $pengguna = $this->allPengguna();
+
+        $duplicateIndex = collect($pengguna)->search(fn ($item) => strtolower($item['email']) === strtolower($validated['email']) || $item['id'] === $validated['id']);
+
+        if ($duplicateIndex !== false) {
+            return back()->withErrors(['email' => 'ID atau email sudah terdaftar.'])->withInput();
+        }
+
+        $pengguna[] = [
+            'id' => $validated['id'],
+            'nama' => $validated['nama'],
+            'email' => strtolower($validated['email']),
+            'password' => $validated['password'],
+            'role' => $validated['role'],
+        ];
+
+        session(['smartedu_pengguna' => $pengguna]);
+
+        return redirect()->route('staff-tu.pengguna')->with('success', 'Pengguna berhasil ditambahkan.');
+    }
+
+    public function editPengguna($id)
+    {
+        $pengguna = $this->allPengguna();
+        $user = collect($pengguna)->firstWhere('id', $id);
+
+        if (!$user) {
+            abort(404);
+        }
+
+        return view('smartedu.staff-tu.pengguna-edit', compact('user'));
+    }
+
+    public function updatePengguna(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'id' => ['required', 'string', 'max:20'],
+            'nama' => ['required', 'string', 'max:100'],
+            'email' => ['required', 'email', 'max:100'],
+            'password' => ['required', 'string', 'min:4'],
+            'role' => ['required', 'in:Staff TU,Guru,Siswa,Orang Tua'],
+        ]);
+
+        $pengguna = $this->allPengguna();
+        foreach ($pengguna as $index => $item) {
+            if ($item['id'] === $id) {
+                $duplicate = collect($pengguna)->contains(fn ($value, $key) => $key !== $index && ($value['email'] === strtolower($validated['email']) || $value['id'] === $validated['id']));
+
+                if ($duplicate) {
+                    return back()->withErrors(['email' => 'ID atau email sudah digunakan oleh pengguna lain.'])->withInput();
+                }
+
+                $pengguna[$index] = [
+                    'id' => $validated['id'],
+                    'nama' => $validated['nama'],
+                    'email' => strtolower($validated['email']),
+                    'password' => $validated['password'],
+                    'role' => $validated['role'],
+                ];
+
+                session(['smartedu_pengguna' => $pengguna]);
+                return redirect()->route('staff-tu.pengguna')->with('success', 'Pengguna berhasil diperbarui.');
+            }
+        }
+
+        abort(404);
+    }
+
+    public function destroyPengguna($id)
+    {
+        $pengguna = $this->allPengguna();
+        $filtered = collect($pengguna)->reject(fn ($item) => $item['id'] === $id)->values()->all();
+
+        session(['smartedu_pengguna' => $filtered]);
+
+        return redirect()->route('staff-tu.pengguna')->with('success', 'Pengguna berhasil dihapus.');
+    }
+
+    protected function allPengguna(): array
+    {
+        $pengguna = session('smartedu_pengguna');
+
+        if (!is_array($pengguna) || empty($pengguna)) {
+            return $this->defaultPengguna();
+        }
+
+        $defaultPengguna = $this->defaultPengguna();
+        $existingEmails = collect($pengguna)->map(fn ($user) => strtolower((string) ($user['email'] ?? '')))->filter()->all();
+
+        foreach ($defaultPengguna as $user) {
+            if (!in_array(strtolower((string) ($user['email'] ?? '')), $existingEmails, true)) {
+                $pengguna[] = $user;
+                $existingEmails[] = strtolower((string) $user['email']);
+            }
+        }
+
+        return array_values($pengguna);
+    }
+
+    protected function defaultPengguna(): array
+    {
+        return [
+            ['id' => 'TU-001', 'nama' => 'Admin Sekolah', 'email' => 'admin@smartedu.id', 'password' => 'password', 'role' => 'Staff TU'],
+            ['id' => 'GR-0012', 'nama' => 'Ibu Dewi', 'email' => 'dewi@smartedu.id', 'password' => 'password', 'role' => 'Guru'],
+            ['id' => '20240001', 'nama' => 'Andi Prasetyo', 'email' => 'andi@smartedu.id', 'password' => 'password', 'role' => 'Siswa'],
+            ['id' => 'OT-20240001', 'nama' => 'Bapak Prasetyo', 'email' => 'prasetyo@gmail.com', 'password' => 'password', 'role' => 'Orang Tua'],
+        ];
     }
 
     public function kelas()
@@ -142,16 +327,60 @@ class SmartEduController extends Controller
 
     public function mapel()
     {
-        $mapel = [
-            ['kode' => 'MTK', 'nama' => 'Matematika'],
-            ['kode' => 'IPA', 'nama' => 'Ilmu Pengetahuan Alam'],
-            ['kode' => 'IPS', 'nama' => 'Ilmu Pengetahuan Sosial'],
-            ['kode' => 'BIN', 'nama' => 'Bahasa Indonesia'],
-            ['kode' => 'BIG', 'nama' => 'Bahasa Inggris'],
-            ['kode' => 'PKN', 'nama' => 'Pendidikan Kewarganegaraan'],
-        ];
+        $mapel = DB::table('mapel_uploads')
+            ->select('id', 'kode_mapel as kode', 'nama_mapel as nama', 'nama_asli', 'path_file')
+            ->whereNotNull('kode_mapel')
+            ->whereNotNull('nama_mapel')
+            ->orderBy('kode_mapel')
+            ->get()
+            ->map(fn ($item) => [
+                'id' => $item->id,
+                'kode' => $item->kode,
+                'nama' => $item->nama,
+                'nama_file' => $item->nama_asli,
+                'path_file' => $item->path_file,
+            ])
+            ->all();
+
+        if (empty($mapel)) {
+            $mapel = [
+                ['kode' => 'MTK', 'nama' => 'Matematika'],
+                ['kode' => 'IPA', 'nama' => 'Ilmu Pengetahuan Alam'],
+                ['kode' => 'IPS', 'nama' => 'Ilmu Pengetahuan Sosial'],
+                ['kode' => 'BIN', 'nama' => 'Bahasa Indonesia'],
+                ['kode' => 'BIG', 'nama' => 'Bahasa Inggris'],
+                ['kode' => 'PKN', 'nama' => 'Pendidikan Kewarganegaraan'],
+            ];
+        }
 
         return view('smartedu.staff-tu.mapel', compact('mapel'));
+    }
+
+    public function uploadMapelFile(Request $request)
+    {
+        $validated = $request->validate([
+            'kode_mapel' => ['required', 'string', 'max:20'],
+            'nama_mapel' => ['required', 'string', 'max:100'],
+            'file' => ['required', 'file', 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,jpg,jpeg,png', 'max:2048'],
+        ]);
+
+        $file = $request->file('file');
+        $filename = time() . '_' . $file->getClientOriginalName();
+        $path = $file->storeAs('uploads/mapel', $filename, 'public');
+
+        DB::table('mapel_uploads')->insert([
+            'kode_mapel' => strtoupper(trim($validated['kode_mapel'])),
+            'nama_mapel' => trim($validated['nama_mapel']),
+            'nama_file' => $filename,
+            'nama_asli' => $file->getClientOriginalName(),
+            'path_file' => Storage::url($path),
+            'mime_type' => $file->getMimeType(),
+            'ukuran' => $file->getSize(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return redirect()->route('staff-tu.mapel')->with('success', 'Mapel berhasil ditambahkan: ' . trim($validated['nama_mapel']));
     }
 
     // ----------------------------------------------------------
